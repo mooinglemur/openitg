@@ -9,31 +9,17 @@
 
 inline uint32_t ArchSwap32( uint32_t n )
 {
-	asm(
-		"xchg %b0, %h0\n"
-		"rorl $16, %0\n"
-		"xchg %b0, %h0":
-		"=q" (n): "0" (n) );
-	return n;
+        return ( n >> 24 ) | ( n << 24 ) | ( ( n >> 8 ) & 0x00ff00 ) | ( ( n << 8 ) & 0xff0000 );
 }
 
 inline uint32_t ArchSwap24( uint32_t n )
 {
-	asm(
-		"xchg %b0, %h0\n"
-		"rorl $16, %0\n"
-		"xchg %b0, %h0\n"
-		"shrl $8, %0\n":
-		"=q" (n): "0" (n) );
-	return n;
+        return ArchSwap32( n ) >> 8;
 }
 
 inline uint16_t ArchSwap16( uint16_t n )
 {
-	asm(
-		"xchg %b0, %h0\n":
-		"=q" (n): "0" (n) );
-	return n;
+        return ( n << 8 ) | ( n >> 8 );
 }
 
 #define HAVE_BYTE_SWAPS

@@ -2,7 +2,12 @@
 #include "RageUtil.h"
 #include "RageSoundReader_Resample_Good.h"
 
+#if defined(HAVE_LIBSAMPLERATE)
+#include <samplerate.h>
+#else
 #include "libresample/include/libresample.h"
+#endif
+
 #if defined(_MSC_VER) && !defined(_XBOX)
 #pragma comment(lib, "libresample/resample.lib")
 #endif
@@ -23,11 +28,11 @@
 RageSoundReader_Resample_Good::RageSoundReader_Resample_Good()
 {
 	source = NULL;
-	empty_resamp = NULL;
 	samplerate = -1;
 	BufSamples = 0;
 	eof = false;
 	HighQuality = false;
+	src_err = NULL;
 }
 
 /* Call this if the input position is changed or reset. */
@@ -39,11 +44,9 @@ void RageSoundReader_Resample_Good::Reset()
 	/* Flush the resampler. */
 	for( unsigned i = 0; i < resamplers.size(); ++i )
 	{
-		resample_channel &r = resamplers[i];
+		SRC_STATE &r = resamplers[i];
 		if( r.resamp )
-			resample_close( r.resamp );
-
-		r.resamp = resample_dup( empty_resamp );
+			src_reset( r.resamp );
 	}
 }
 
@@ -51,16 +54,14 @@ void RageSoundReader_Resample_Good::Reset()
 /* Call this if the sample factor changes. */
 void RageSoundReader_Resample_Good::ReopenResampler()
 {
-	if( empty_resamp )
-		resample_close( empty_resamp );
-	empty_resamp = resample_open( HighQuality, GetFactor()-0.1f, GetFactor()+0.1f );
-
 	for( unsigned i = 0; i < resamplers.size(); ++i )
 	{
-		resample_channel &r = resamplers[i];
+		SRC_STATE &r = resamplers[i];
 		if( r.resamp )
-			resample_close( r.resamp );
-		r.resamp = resample_dup( empty_resamp );
+			src_reset( r.resamp );
+		else 
+			r.resamp = src_new( SRC_SINC_MEDIUM_QUALITY, 1, &src_err);
+
 	}
 }
 
@@ -72,7 +73,7 @@ void RageSoundReader_Resample_Good::Open(SoundReader *source_)
 	samplerate = source->GetSampleRate();
 
 	for( unsigned i = 0; i < source->GetNumChannels(); ++i )
-		resamplers.push_back( resample_channel() );
+		resamplers.push_back( src_new( SRC_SINC_MEDIUM_QUALITY, 1, &src_err) );
 }
 
 
@@ -81,11 +82,8 @@ RageSoundReader_Resample_Good::~RageSoundReader_Resample_Good()
 	for( unsigned i = 0; i < resamplers.size(); ++i )
 	{
 		if( resamplers[i].resamp )
-			resample_close( resamplers[i].resamp );
+			src_delete ( resamplers[i].resamp );
 	}
-
-	if( empty_resamp )
-		resample_close( empty_resamp );
 
 	delete source;
 }
@@ -170,15 +168,22 @@ int RageSoundReader_Resample_Good::Read(char *bufp, unsigned len)
 		{
 			for( unsigned i = 0; i < channels; ++i )
 			{
-				resample_channel &r = resamplers[i];
+				SRC_STATE &r = resamplers[i];
 				ASSERT( r.resamp );
 				float outbuf[BUFSIZE];
-				samples_output = resample_process( r.resamp,
-						factor,
-						r.inbuf, BufSamples,
-						eof,
-						&samples_used,
-						outbuf, len/channels);
+//				samples_output = resample_process( r.resamp,
+//						factor,
+//						r.inbuf, BufSamples,
+//						eof,
+//						&samples_used,
+//						outbuf, len/channels);
+//
+				struct SRC_DATA data;
+				data.data_in = 
+
+
+				samples_output = src_process ( r.resamp, src_data );
+			
 				if( samples_output == -1 )
 					RageException::Throw( "Unexpected resample_process return value: -1" );
 

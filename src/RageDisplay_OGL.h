@@ -15,15 +15,15 @@ public:
 
 	bool IsSoftwareRenderer();
 	void ResolutionChanged();
-	const PixelFormatDesc *GetPixelFormatDesc(PixelFormat pf) const;
+	const PixelFormatDesc *GetPixelFormatDesc(ITGPixelFormat pf) const;
 
 	bool BeginFrame();	
 	void EndFrame();
 	VideoModeParams GetVideoModeParams() const;
 	void SetBlendMode( BlendMode mode );
-	bool SupportsTextureFormat( PixelFormat pixfmt, bool realtime=false );
+	bool SupportsTextureFormat( ITGPixelFormat pixfmt, bool realtime=false );
 	unsigned CreateTexture( 
-		PixelFormat pixfmt, 
+		ITGPixelFormat pixfmt, 
 		RageSurface* img,
 		bool bGenerateMipMaps );
 	void UpdateTexture( 
@@ -88,8 +88,8 @@ protected:
 	CString TryVideoMode( VideoModeParams params, bool &bNewDeviceOut );
 	RageSurface* CreateScreenshot();
 	void SetViewport(int shift_left, int shift_down);
-	PixelFormat GetImgPixelFormat( RageSurface* &img, bool &FreeImg, int width, int height, bool bPalettedTexture );
-	bool SupportsSurfaceFormat( PixelFormat pixfmt );
+	ITGPixelFormat GetImgPixelFormat( RageSurface* &img, bool &FreeImg, int width, int height, bool bPalettedTexture );
+	bool SupportsSurfaceFormat( ITGPixelFormat pixfmt );
 	
 	void SendCurrentMatrices();
 };

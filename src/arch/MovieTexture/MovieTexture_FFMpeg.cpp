@@ -27,6 +27,7 @@ namespace avcodec
 		#if defined(HAVE_FFMPEG)
 			#include <libavformat/avformat.h>
 			#include <libswscale/swscale.h>
+			#include <libavutil/pixdesc.h>
 		#else
 			#include "ffmpeg/include/ffmpeg/avformat.h"
 		#endif
@@ -145,7 +146,7 @@ static void FixLilEndian()
 #endif
 }
 
-static int FindCompatibleAVFormat( RageDisplay::PixelFormat &pixfmt, bool HighColor )
+static int FindCompatibleAVFormat( RageDisplay::ITGPixelFormat &pixfmt, bool HighColor )
 {
 	for( int i = 0; AVPixelFormats[i].bpp; ++i )
 	{
@@ -362,14 +363,10 @@ int FFMpeg_Helper::DecodePacket()
 		/* Hack: we need to send size = 0 to flush frames at the end, but we have
 		 * to give it a buffer to read from since it tries to read anyway. */
 		static uint8_t dummy[FF_INPUT_BUFFER_PADDING_SIZE] = { 0 };
-		int len = avcodec::avcodec_decode_video(
-#if (LIBAVCODEC_BUILD >= 4754)
-				m_stream->codec, 
-#else
- 				&m_stream->codec, 
-#endif
+		int len = avcodec::avcodec_decode_video2(
+ 				m_stream->codec, 
 				&frame, &got_frame,
-				pkt.size? pkt.data:dummy, pkt.size );
+				&pkt );
 		//CHECKPOINT;
 
 		if (len < 0)
@@ -440,10 +437,10 @@ static avcodec::AVStream *FindVideoStream( avcodec::AVFormatContext *m_fctx )
 	{
 		avcodec::AVStream *enc = m_fctx->streams[stream];
 #if (LIBAVCODEC_BUILD >= 4754)
-        if( enc->codec->codec_type == avcodec::CODEC_TYPE_VIDEO )
+        if( enc->codec->codec_type == avcodec::AVMEDIA_TYPE_VIDEO )
 			return enc;
 #else
-        if( enc->codec.codec_type == avcodec::CODEC_TYPE_VIDEO )
+        if( enc->codec.codec_type == avcodec::AVMEDIA_TYPE_VIDEO )
 			return enc;
 #endif
 	}
@@ -478,13 +475,8 @@ CString MovieTexture_FFMpeg::Init()
 	if( sError != "" )
 		return sError;
 
-#if (LIBAVCODEC_BUILD >= 4754)
 	LOG->Trace("Bitrate: %i", decoder->m_stream->codec->bit_rate );
-	LOG->Trace("Codec pixel format: %s", avcodec::avcodec_get_pix_fmt_name(decoder->m_stream->codec->pix_fmt) );
-#else
-	LOG->Trace("Bitrate: %i", decoder->m_stream->codec.bit_rate );
-	LOG->Trace("Codec pixel format: %s", avcodec::avcodec_get_pix_fmt_name(decoder->m_stream->codec.pix_fmt) );
-#endif
+	LOG->Trace("Codec pixel format: %s", avcodec::av_get_pix_fmt_name(decoder->m_stream->codec->pix_fmt) );
 
 	/* Decode one frame, to guarantee that the texture is drawn when this function returns. */
 	int ret = decoder->GetFrame();
@@ -538,86 +530,15 @@ static CString averr_ssprintf( int err, const char *fmt, ... )
 	CString Error;
 	switch( err )
 	{
-	case AVERROR_IO:			Error = "I/O error"; break;
-	case AVERROR_NUMEXPECTED:	Error = "number syntax expected in filename"; break;
-	case AVERROR_INVALIDDATA:	Error = "invalid data found"; break;
-	case AVERROR_NOMEM:			Error = "not enough memory"; break;
-	case AVERROR_NOFMT:			Error = "unknown format"; break;
+	case AVERROR(EIO):			Error = "I/O error"; break;
+	case AVERROR(EINVAL):	Error = "invalid data found"; break;
+	case AVERROR(ENOMEM):			Error = "not enough memory"; break;
+	case AVERROR(EILSEQ):			Error = "unknown format"; break;
 	default: Error = ssprintf( "unknown error %i", err ); break;
 	}
 
 	return s + " (" + Error + ")";
 }
-
-int URLRageFile_open( avcodec::URLContext *h, const char *filename, int flags )
-{
-	if( strncmp( filename, "rage://", 7 ) )
-	{
-		LOG->Warn("URLRageFile_open: Unexpected path \"%s\"", filename );
-	    return -EIO;
-	}
-	filename += 7;
-
-	int mode = 0;
-	switch( flags )
-	{
-	case URL_RDONLY: mode = RageFile::READ; break;
-	case URL_WRONLY: mode = RageFile::WRITE | RageFile::STREAMED; break;
-	case URL_RDWR: FAIL_M( "O_RDWR unsupported" );
-	}
-
-	RageFile *f = new RageFile;
-	if( !f->Open(filename, mode) )
-	{
-		LOG->Trace("Error opening \"%s\": %s", filename, f->GetError().c_str() );
-		delete f;
-	    return -EIO;
-	}
-
-	h->is_streamed = false;
-	h->priv_data = f;
-	return 0;
-}
-
-int URLRageFile_read( avcodec::URLContext *h, unsigned char *buf, int size )
-{
-	RageFile *f = (RageFile *) h->priv_data;
-	return f->Read( buf, size );
-}
-
-#if LIBAVFORMAT_BUILD > AV_VERSION_INT(52, 67, 0)
-int URLRageFile_write( avcodec::URLContext *h, const unsigned char *buf, int size )
-#else
-int URLRageFile_write( avcodec::URLContext *h, unsigned char *buf, int size )
-#endif
-{
-	RageFile *f = (RageFile *) h->priv_data;
-	return f->Write( buf, size );
-}
-
-int64_t URLRageFile_seek( avcodec::URLContext *h, int64_t pos, int whence )
-{
-	RageFile *f = (RageFile *) h->priv_data;
-	return f->Seek( (int) pos, whence );
-}
-
-int URLRageFile_close( avcodec::URLContext *h )
-{
-	RageFile *f = (RageFile *) h->priv_data;
-	delete f;
-	return 0;
-}
-
-static avcodec::URLProtocol RageProtocol =
-{
-	"rage",
-	URLRageFile_open,
-	URLRageFile_read,
-	URLRageFile_write,
-	URLRageFile_seek,
-	URLRageFile_close,
-	NULL
-};
 
 void MovieTexture_FFMpeg::RegisterProtocols()
 {
@@ -626,19 +547,19 @@ void MovieTexture_FFMpeg::RegisterProtocols()
 		return;
 	Done = true;
 
+	avcodec::avcodec_register_all();
 	avcodec::av_register_all();
-	avcodec::register_protocol( &RageProtocol );
 }
 
 CString MovieTexture_FFMpeg::CreateDecoder()
 {
 	RegisterProtocols();
 
-	int ret = avcodec::av_open_input_file( &decoder->m_fctx, "rage://" + GetID().filename, NULL, 0, NULL );
+	int ret = avcodec::avformat_open_input( &decoder->m_fctx, GetID().filename, NULL, NULL );
 	if( ret < 0 )
 		return ssprintf( averr_ssprintf(ret, "AVCodec: Couldn't open \"%s\"", GetID().filename.c_str()) );
 
-	ret = avcodec::av_find_stream_info( decoder->m_fctx );
+	ret = avcodec::avformat_find_stream_info( decoder->m_fctx, NULL );
 	if ( ret < 0 )
 		return ssprintf( averr_ssprintf(ret, "AVCodec (%s): Couldn't find codec parameters", GetID().filename.c_str()) );
 
@@ -655,7 +576,7 @@ CString MovieTexture_FFMpeg::CreateDecoder()
 		return ssprintf( "AVCodec (%s): Couldn't find decoder %i", GetID().filename.c_str(), stream->codec->codec_id );
 
 	LOG->Trace("Opening codec %s", codec->name );
-	ret = avcodec::avcodec_open( stream->codec, codec );
+	ret = avcodec::avcodec_open2( stream->codec, codec, NULL );
 #else
 	if( stream->codec.codec_id == avcodec::CODEC_ID_NONE )
 		return ssprintf( "AVCodec (%s): Unsupported codec %08x", GetID().filename.c_str(), stream->codec.codec_tag );
@@ -745,7 +666,7 @@ void MovieTexture_FFMpeg::CreateTexture()
 	m_iTextureHeight = power_of_two(m_iImageHeight);
 
 	/* Bogus assignment to shut gcc up. */
-    RageDisplay::PixelFormat pixfmt = RageDisplay::FMT_RGBA8;
+    RageDisplay::ITGPixelFormat pixfmt = RageDisplay::FMT_RGBA8;
 	bool PreferHighColor = (TEXTUREMAN->GetPrefs().m_iMovieColorDepth == 32);
 	m_AVTexfmt = FindCompatibleAVFormat( pixfmt, PreferHighColor );
 

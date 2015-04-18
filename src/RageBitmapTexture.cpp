@@ -153,7 +153,7 @@ void RageBitmapTexture::Create()
 		RageSurfaceUtils::Zoom( img, m_iImageWidth, m_iImageHeight );
 
 	// Format of the image that we will pass to OpenGL and that we want OpenGL to use
-	RageDisplay::PixelFormat pixfmt;
+	RageDisplay::ITGPixelFormat pixfmt;
 
 	if( actualID.iGrayscaleBits != -1 && DISPLAY->SupportsTextureFormat(RageDisplay::FMT_PAL) )
 	{

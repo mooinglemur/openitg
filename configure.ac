@@ -172,19 +172,20 @@ AC_CHECK_HEADER([sys/inotify.h],
 ,)
 
 have_ffmpeg=static
-have_libresample=static
+have_libsamplerate=static
 have_sse2=no
 
 # Formerly, building for arcade skipped these tests.  There is no reason to skip these tests
 
 AC_SEARCH_LIBS(avcodec_register_all, [avcodec], have_libavcodec=yes,  have_libavcodec=no)
-AC_SEARCH_LIBS(guess_format, [avformat], have_libavformat=yes,  have_libavformat=no)
+AC_SEARCH_LIBS(av_get_pix_fmt_name, [avutil], have_libavutil=yes,  have_libavutil=no)
+AC_SEARCH_LIBS(av_guess_format, [avformat], have_libavformat=yes,  have_libavformat=no)
 AC_SEARCH_LIBS(swscale_version, [swscale], have_libswscale=yes,  have_libswscale=no)
 
-have_libresample=yes
-AC_CHECK_LIB(resample, resample_open, [x=y], have_libresample=static, [-lm])
-if test "$have_libresample" = "yes"; then
-	LIBS="$LIBS -lresample"
+have_libsamplerate=yes
+AC_CHECK_LIB(samplerate, src_new, [x=y], have_libsamplerate=no, [-lm])
+if test "$have_libsamplerate" = "yes"; then
+	LIBS="$LIBS -lsamplerate"
 fi
 
 if test "$have_libavcodec" = "yes"; then
@@ -223,7 +224,7 @@ if test "$have_libswscale" = "yes"; then
   AC_MSG_RESULT($have_libswscale)
 fi
 
-if test "$have_libavformat" = "yes" -a "$have_libavcodec" = "yes" -a "$have_libswscale" = "yes"; then
+if test "$have_libavformat" = "yes" -a "$have_libavcodec" = "yes" -a "$have_libavutil" = "yes" -a "$have_libswscale" = "yes"; then
 	have_ffmpeg=yes
 	AC_DEFINE(HAVE_FFMPEG, 1, [FFMPEG support available])
 fi
@@ -232,7 +233,7 @@ fi
 AC_TRY_RUN([int main() { int a,d; asm ("cpuid":"=a"(a),"=d"(d):"0"(1)); return d & (1 << 26) ? 0 : 1; }], have_sse2=yes, have_sse2=no)
 
 AM_CONDITIONAL(HAVE_FFMPEG, test "$have_ffmpeg" = "yes")
-AM_CONDITIONAL(HAVE_LIBRESAMPLE, test "$have_libresample" = "yes")
+AM_CONDITIONAL(HAVE_SAMPLERATE, test "$have_libsamplerate" = "yes")
 
 # Don't use SSE2 by default; some GCC versions misoptimise the code, which
 # causes Heisenbugs, and we don't want to inflict that pain unnecessarily.
@@ -308,9 +309,9 @@ AM_CONDITIONAL(BUILD_TESTS, test "$enable_tests" = "yes" )
 AC_CONFIG_FILES(Makefile)
 AC_CONFIG_FILES(src/Makefile)
 
-if test "$have_libresample" = "no"; then
-	# use our own libresample in vain
-	cd src/libresample && autoconf && ./configure && cd ../..
+if test "$have_libsamplerate" = "no"; then
+	echo "Required dependency libsamplerate is not installed"
+	exit 1
 fi
 
 AC_CHECK_PROG([have_git], [git], yes, no)
@@ -370,7 +371,7 @@ echo "Arcade build		$itg_arcade"
 echo "SSE2 optimizations	$with_sse2 (supported: $have_sse2)"
 echo "SDL			$enable_sdl"
 echo "FFMPEG			$have_ffmpeg"
-echo "libresample		$have_libresample"
+echo "libsamplerate		$have_libsamplerate"
 echo "GTK2			$enable_gtk2"
 echo "ALSA			$alsa"
 echo "OSS			$ac_cv_header_sys_soundcard_h (forced: $force_oss)"

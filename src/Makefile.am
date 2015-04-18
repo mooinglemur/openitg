@@ -7,7 +7,7 @@ endif
 
 AM_LDFLAGS =
 AM_CXXFLAGS = 
-AM_CFLAGS = 
+AM_CFLAGS =
 
 # Relax inlining; the default of 600 takes way too long to compile and
 # generates enormous output.
@@ -21,24 +21,7 @@ else
 LIBS += -nodefaultlibs -Wl,-Bstatic -lstdc++ $(LUA_LIBS) -lXrandr -lXrender -lmad -lgcc -lgcc_eh -Wl,-Bdynamic -lpthread -lusb -lc
 endif
 
-if !HAVE_LIBRESAMPLE
-all: $(srcdir)/libresample/libresample.a $(srcdir)/libtomcrypt/libtomcrypt.a $(srcdir)/libtommath/libtommath.a
-
-clean-local: clean_libresample clean_libtomcrypt clean_libtommath
-
-clean_libresample:
-	cd libresample && $(MAKE) clean
-
-clean_libtomcrypt:
-	cd libtomcrypt && $(MAKE) clean
-clean_libtommath:
-	cd libtommath && $(MAKE) clean
-
-$(srcdir)/libresample/libresample.a:
-	cd $(srcdir)/libresample && autoconf && sh ./configure && make
-else
 all: $(srcdir)/libtomcrypt/libtomcrypt.a $(srcdir)/libtommath/libtommath.a
-endif
 
 $(srcdir)/libtomcrypt/libtomcrypt.a: $(srcdir)/libtommath/libtommath.a
 	cd $(srcdir)/libtomcrypt && CFLAGS="$(CFLAGS) -I$(srcdir)/../libtommath" $(MAKE)
@@ -450,10 +433,6 @@ main_LDADD = \
 
 openitg_SOURCES = $(main_SOURCES)
 
-if !HAVE_LIBRESAMPLE
-main_LDADD += $(srcdir)/libresample/libresample.a
-endif
-
 if !HAVE_FFMPEG
 openitg_LDADD = $(main_LDADD) \
 	$(srcdir)/ffmpeg/lib/libavformat.a $(srcdir)/ffmpeg/lib/libavcodec.a
@@ -510,10 +489,6 @@ test_audio_readers_SOURCES = \
 test_audio_readers_LDADD = \
 		$(AUDIO_LIBS)
 
-if !HAVE_LIBRESAMPLE
-test_audio_readers_LDADD += $(srcdir)/libresample/libresample.a
-endif
-
 TESTS += test_file_readers
 test_file_readers_SOURCES = \
 		$(all_test_SOURCES) \
@@ -550,5 +525,5 @@ test_threads_SOURCES = \
 		$(all_test_SOURCES) \
 		tests/test_threads.cpp
 
-INCLUDES = $(LUA_CFLAGS) $(SDL_CFLAGS)
+AM_CPPFLAGS = $(LUA_CFLAGS) $(SDL_CFLAGS)
 

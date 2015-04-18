@@ -36,7 +36,6 @@ private:
 	bool HighQuality;
 	int samplerate;
 
-	void *empty_resamp;
 	struct resample_channel
 	{
 		resample_channel(): resamp(NULL) { }
@@ -51,6 +50,7 @@ private:
 	void ReopenResampler();
 	float GetFactor() const;
 	bool FillBuf();
+	int src_err;
 };
 
 #endif

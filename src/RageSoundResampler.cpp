@@ -122,7 +122,7 @@ int RageSoundResampler::read(void *data, unsigned bytes)
 		return -1;
 
 	/* Fill as much as we have. */
-	int Avail = min((int)outbuf.size()*sizeof(int16_t), (long unsigned)bytes);
+	int Avail = min((long unsigned)outbuf.size()*sizeof(int16_t), (long unsigned)bytes);
 	memcpy(data, &outbuf[0], Avail);
 	outbuf.erase(outbuf.begin(), outbuf.begin() + Avail/sizeof(int16_t));
 	return Avail;

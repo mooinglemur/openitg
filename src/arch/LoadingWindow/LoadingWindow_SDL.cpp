@@ -29,7 +29,7 @@ LoadingWindow_SDL::LoadingWindow_SDL()
 	SDL_WM_SetCaption("Loading StepMania", "");
 
 	CString error;
-	RageSurface *srf = RageSurface_Load_XPM( icon, error );
+	RageSurface *srf = RageSurface_Load_XPM( (const char **)icon, error );
 
 	uint32_t color;
 	if( srf->fmt.MapRGBA( 0xFF, 0, 0xFF, 0xFF, color ) )

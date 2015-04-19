@@ -2,26 +2,11 @@
 #include "RageUtil.h"
 #include "RageSoundReader_Resample_Good.h"
 
-#if defined(HAVE_LIBSAMPLERATE)
-#include <samplerate.h>
-#else
-#include "libresample/include/libresample.h"
-#endif
-
-#if defined(_MSC_VER) && !defined(_XBOX)
-#pragma comment(lib, "libresample/resample.lib")
-#endif
-
-#ifdef _XBOX
-
-#ifdef _DEBUG
-#pragma comment(lib, "libresample/xboxresample/debug/xboxresample.lib")
-#else
-#pragma comment(lib, "libresample/xboxresample/release/xboxresample.lib")
-#endif
-
-#endif
-
+extern "C"
+{
+ #include <libavutil/opt.h>
+ #include <libavresample/avresample.h>
+}
 
 #define channels source->GetNumChannels()
 
@@ -32,7 +17,6 @@ RageSoundReader_Resample_Good::RageSoundReader_Resample_Good()
 	BufSamples = 0;
 	eof = false;
 	HighQuality = false;
-	src_err = NULL;
 }
 
 /* Call this if the input position is changed or reset. */
@@ -44,9 +28,23 @@ void RageSoundReader_Resample_Good::Reset()
 	/* Flush the resampler. */
 	for( unsigned i = 0; i < resamplers.size(); ++i )
 	{
-		SRC_STATE &r = resamplers[i];
-		if( r.resamp )
-			src_reset( r.resamp );
+		resample_channel &r = resamplers[i];
+		if( r.resamp ) 
+		{
+			avresample_close( r.resamp );
+			avresample_open( r.resamp );
+		} 
+		else 
+		{	
+			r.resamp = avresample_alloc_context();
+			av_opt_set_int( r.resamp, "in_channel_layout", AV_CH_LAYOUT_MONO, 0 );
+			av_opt_set_int( r.resamp, "out_channel_layout", AV_CH_LAYOUT_MONO, 0 );
+			av_opt_set_int( r.resamp, "in_sample_rate", source->GetSampleRate(), 0 );
+			av_opt_set_int( r.resamp, "out_sample_rate", samplerate, 0 );
+			av_opt_set_int( r.resamp, "in_sample_fmt", AV_SAMPLE_FMT_S16, 0 );
+			av_opt_set_int( r.resamp, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0 );
+			avresample_open( r.resamp );
+		}
 	}
 }
 
@@ -56,11 +54,25 @@ void RageSoundReader_Resample_Good::ReopenResampler()
 {
 	for( unsigned i = 0; i < resamplers.size(); ++i )
 	{
-		SRC_STATE &r = resamplers[i];
+		resample_channel &r = resamplers[i];
 		if( r.resamp )
-			src_reset( r.resamp );
+		{
+			avresample_close( r.resamp );
+			av_opt_set_int( r.resamp, "in_sample_rate", source->GetSampleRate(), 0 );
+			av_opt_set_int( r.resamp, "out_sample_rate", samplerate, 0 );
+			avresample_open( r.resamp );
+		} 
 		else 
-			r.resamp = src_new( SRC_SINC_MEDIUM_QUALITY, 1, &src_err);
+		{
+			r.resamp = avresample_alloc_context();
+			av_opt_set_int( r.resamp, "in_channel_layout", AV_CH_LAYOUT_MONO, 0 );
+			av_opt_set_int( r.resamp, "out_channel_layout", AV_CH_LAYOUT_MONO, 0 );
+			av_opt_set_int( r.resamp, "in_sample_rate", source->GetSampleRate(), 0 );
+			av_opt_set_int( r.resamp, "out_sample_rate", samplerate, 0 );
+			av_opt_set_int( r.resamp, "in_sample_fmt", AV_SAMPLE_FMT_S16, 0 );
+			av_opt_set_int( r.resamp, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0 );
+			avresample_open( r.resamp );
+		}
 
 	}
 }
@@ -73,7 +85,7 @@ void RageSoundReader_Resample_Good::Open(SoundReader *source_)
 	samplerate = source->GetSampleRate();
 
 	for( unsigned i = 0; i < source->GetNumChannels(); ++i )
-		resamplers.push_back( src_new( SRC_SINC_MEDIUM_QUALITY, 1, &src_err) );
+		resamplers.push_back( resample_channel() );
 }
 
 
@@ -82,7 +94,7 @@ RageSoundReader_Resample_Good::~RageSoundReader_Resample_Good()
 	for( unsigned i = 0; i < resamplers.size(); ++i )
 	{
 		if( resamplers[i].resamp )
-			src_delete ( resamplers[i].resamp );
+			avresample_free( &resamplers[i].resamp );
 	}
 
 	delete source;
@@ -168,9 +180,9 @@ int RageSoundReader_Resample_Good::Read(char *bufp, unsigned len)
 		{
 			for( unsigned i = 0; i < channels; ++i )
 			{
-				SRC_STATE &r = resamplers[i];
+				resample_channel &r = resamplers[i];
 				ASSERT( r.resamp );
-				float outbuf[BUFSIZE];
+//				float outbuf[BUFSIZE];
 //				samples_output = resample_process( r.resamp,
 //						factor,
 //						r.inbuf, BufSamples,
@@ -178,21 +190,25 @@ int RageSoundReader_Resample_Good::Read(char *bufp, unsigned len)
 //						&samples_used,
 //						outbuf, len/channels);
 //
-				struct SRC_DATA data;
-				data.data_in = 
 
+				uint8_t *outbuf;
+				uint8_t *inbuf_cast = (uint8_t *)r.inbuf;
+				int out_linesize;
+				samples_output = avresample_available( r.resamp ) + avresample_get_delay( r.resamp ) + BufSamples * GetFactor();
+				av_samples_alloc( &outbuf, &out_linesize, 1, samples_output, AV_SAMPLE_FMT_S16, 0 );
 
-				samples_output = src_process ( r.resamp, src_data );
+				samples_output = avresample_convert( r.resamp, &outbuf, out_linesize, samples_output, &inbuf_cast, sizeof(int16_t)*BufSamples, BufSamples );
 			
-				if( samples_output == -1 )
-					RageException::Throw( "Unexpected resample_process return value: -1" );
+				if( samples_output < 0 )
+					RageException::Throw( "Unexpected resample_process return value < 0" );
 
-				memmove( r.inbuf, &r.inbuf[samples_used], sizeof(float) * (BufSamples-samples_used) );
+				memmove( r.inbuf, &r.inbuf[samples_used], sizeof(int16_t) * (BufSamples-samples_used) );
 
 				for( int s = 0; s < samples_output; ++s )
 				{
-					buf[s*channels+i] = int16_t(clamp(outbuf[s], -32768, 32767));
+					buf[s*channels+i] = ((int16_t *)outbuf)[s];
 				}
+				av_freep(&outbuf);
 			}
 		}
 
@@ -224,10 +240,17 @@ SoundReader *RageSoundReader_Resample_Good::Copy() const
 		const resample_channel &r = resamplers[i];
 		ASSERT( r.resamp );
 		ret->resamplers.push_back( resample_channel() );
-		ret->resamplers[i].resamp = resample_dup( r.resamp );
+		ret->resamplers[i].resamp = avresample_alloc_context();
+		av_opt_set_int( ret->resamplers[i].resamp, "in_channel_layout", AV_CH_LAYOUT_MONO, 0 );
+		av_opt_set_int( ret->resamplers[i].resamp, "out_channel_layout", AV_CH_LAYOUT_MONO, 0 );
+		av_opt_set_int( ret->resamplers[i].resamp, "in_sample_rate", source->GetSampleRate(), 0 );
+		av_opt_set_int( ret->resamplers[i].resamp, "out_sample_rate", samplerate, 0 );
+		av_opt_set_int( ret->resamplers[i].resamp, "in_sample_fmt", AV_SAMPLE_FMT_S16, 0 );
+		av_opt_set_int( ret->resamplers[i].resamp, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0 );
+		avresample_open( ret->resamplers[i].resamp );
+
 		memcpy( ret->resamplers[i].inbuf, r.inbuf, sizeof(r.inbuf));
 	}
-	ret->empty_resamp = resample_dup( empty_resamp );
 	ret->source = new_source;
 	ret->HighQuality = HighQuality;
 	ret->samplerate = samplerate;

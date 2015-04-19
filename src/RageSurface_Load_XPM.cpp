@@ -11,7 +11,7 @@
 		return NULL; \
 	}
 
-RageSurface *RageSurface_Load_XPM( char * const *xpm, CString &error )
+RageSurface *RageSurface_Load_XPM( char const **xpm, CString &error )
 {
 	int line = 0;
 

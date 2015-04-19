@@ -5,6 +5,10 @@
 
 #include "RageSoundReader.h"
 #include "RageSoundReader_Resample.h"
+extern "C"
+{
+#include <libavresample/avresample.h>
+}
 
 /* This class changes the sampling rate of a sound. */
 class RageSoundReader_Resample_Good: public RageSoundReader_Resample
@@ -39,8 +43,8 @@ private:
 	struct resample_channel
 	{
 		resample_channel(): resamp(NULL) { }
-		void *resamp;
-		float inbuf[BUFSIZE];
+		AVAudioResampleContext *resamp;
+		int16_t inbuf[BUFSIZE];
 	};
 	vector<resample_channel> resamplers; /* one per channel */
 	int BufSamples;

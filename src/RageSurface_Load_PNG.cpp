@@ -85,7 +85,7 @@ void PNG_Error( png_struct *png, const char *error )
 void PNG_Warning( png_struct *png, const char *warning )
 {
 	CHECKPOINT;
-	error_info *info = (error_info *) png->error_ptr;
+	error_info *info = (error_info *) png_get_error_ptr( png );
 	LOG->Trace( "loading \"%s\": warning: %s", info->fn, warning );
 }
 

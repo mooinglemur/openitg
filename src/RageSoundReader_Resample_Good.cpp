@@ -172,37 +172,42 @@ int RageSoundReader_Resample_Good::Read(char *bufp, unsigned len)
 	len /= sizeof(int16_t); /* bytes -> samples */
 	const float factor = GetFactor();
 
+
 	int bytes_read = 0;
+
 	while( 1 )
 	{
 		int samples_used = 0, samples_output = 0;
-		if( BufSamples )
+		if ( BufSamples || eof )
 		{
 			for( unsigned i = 0; i < channels; ++i )
 			{
 				resample_channel &r = resamplers[i];
 				ASSERT( r.resamp );
-//				float outbuf[BUFSIZE];
-//				samples_output = resample_process( r.resamp,
-//						factor,
-//						r.inbuf, BufSamples,
-//						eof,
-//						&samples_used,
-//						outbuf, len/channels);
-//
+	//				float outbuf[BUFSIZE];
+	//				samples_output = resample_process( r.resamp,
+	//						factor,
+	//						r.inbuf, BufSamples,
+	//						eof,
+	//						&samples_used,
+	//						outbuf, len/channels);
+	//
 
 				uint8_t *outbuf;
 				uint8_t *inbuf_cast = (uint8_t *)r.inbuf;
 				int out_linesize;
-				samples_output = avresample_available( r.resamp ) + avresample_get_delay( r.resamp ) + BufSamples * GetFactor();
+				samples_output = len/channels;
 				av_samples_alloc( &outbuf, &out_linesize, 1, samples_output, AV_SAMPLE_FMT_S16, 0 );
 
-				samples_output = avresample_convert( r.resamp, &outbuf, out_linesize, samples_output, &inbuf_cast, sizeof(int16_t)*BufSamples, BufSamples );
+				if( !BufSamples && eof )
+					samples_output = avresample_read( r.resamp, &outbuf, samples_output );
+				else
+					samples_output = avresample_convert( r.resamp, &outbuf, out_linesize, samples_output, &inbuf_cast, samples_output, BufSamples );
 			
 				if( samples_output < 0 )
-					RageException::Throw( "Unexpected resample_process return value < 0" );
+					RageException::Throw( "Unexpected resample_process return value: %d", samples_output );
 
-				memmove( r.inbuf, &r.inbuf[samples_used], sizeof(int16_t) * (BufSamples-samples_used) );
+			//	memmove( r.inbuf, &r.inbuf[samples_used], sizeof(int16_t) * (BufSamples-samples_used) );
 
 				for( int s = 0; s < samples_output; ++s )
 				{
@@ -212,7 +217,8 @@ int RageSoundReader_Resample_Good::Read(char *bufp, unsigned len)
 			}
 		}
 
-		BufSamples -= samples_used;
+//		BufSamples -= samples_used;
+		BufSamples = 0; // Always slurps all
 
 		if( !samples_output )
 		{
@@ -223,7 +229,6 @@ int RageSoundReader_Resample_Good::Read(char *bufp, unsigned len)
 			if( !FillBuf() )
 				return -1; /* source error */
 		}
-
 		len -= samples_output*channels;
 		buf += samples_output*channels;
 		bytes_read += samples_output*channels*sizeof(int16_t);
@@ -232,6 +237,7 @@ int RageSoundReader_Resample_Good::Read(char *bufp, unsigned len)
 
 SoundReader *RageSoundReader_Resample_Good::Copy() const
 {
+	printf("Debug: Copy!\n");
 	SoundReader *new_source = source->Copy();
 	RageSoundReader_Resample_Good *ret = new RageSoundReader_Resample_Good;
 

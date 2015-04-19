@@ -33,7 +33,7 @@ public:
 	unsigned GetNumChannels() const { return source->GetNumChannels(); }
 	bool IsStreamingFromDisk() const { return source->IsStreamingFromDisk(); }
 
-	enum { BUFSIZE = 4096 };
+	enum { BUFSIZE = 512 };
 
 private:
 	SoundReader *source;
